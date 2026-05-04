@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boutique Volley 3D - PWA</title>
+    <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+    <style>
+        :root { --primary: #0047AB; --bg: #f4f7f6; }
+        body { font-family: -apple-system, system-ui; background: var(--bg); margin: 0; padding: 10px; }
+        .app-container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 15px; }
+        
+        /* Style du visualiseur 3D */
+        model-viewer {
+            width: 100%;
+            height: 300px;
+            background-color: #eee;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .form-group { margin-bottom: 12px; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        .btn { background: var(--primary); color: white; border: none; padding: 15px; width: 100%; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        
+        .cart-item { background: #f9f9f9; padding: 10px; border-radius: 8px; margin-bottom: 5px; position: relative; font-size: 0.9rem; }
+        .helloasso-box { background: #e3f2fd; padding: 15px; border-radius: 8px; border: 1px dashed var(--primary); margin-top: 20px; display: none; }
+        
+        /* Canvas invisible utilisé pour générer la texture */
+        #textureCanvas { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <h1>🏐 Maillot 3D Personnalisé</h1>
+    
+    <model-viewer id="jersey-model" 
+        src="https://modelviewer.dev/shared-assets/models/Astronaut.glb" 
+        alt="Maillot de Volley" auto-rotate camera-controls shadow-intensity="1">
+    </model-viewer>
+
+    <canvas id="textureCanvas" width="512" height="512"></canvas>
+
+    <div class="product-form">
+        <div class="form-group">
+            <label>Numéro</label>
+            <input type="number" id="number" placeholder="Ex: 7" oninput="update3D()">
+        </div>
+        <div class="form-group">
+            <label>Nom au dos</label>
+            <input type="text" id="name" placeholder="Ex: MARTIN" oninput="update3D()">
+        </div>
+        <div class="form-group">
+            <label>Taille</label>
+            <select id="size">
+                <option value="S">S</option>
+                <option value="M">M</option>
+                <option value="L">L</option>
+                <option value="XL">XL</option>
+            </select>
+        </div>
+        <button class="btn" onclick="addToCart()">Ajouter au panier (45€)</button>
+    </div>
+
+    <div id="cart-section" style="margin-top:30px;">
+        <h3>Mon Panier</h3>
+        <div id="cart-list"></div>
+        <div id="total" style="font-weight:bold; text-align:right; margin:10px 0;">Total : 0€</div>
+        
+        <div id="checkout-area" style="display:none;">
+            <button class="btn" style="background:#E1006E" onclick="generateOrder()">Valider et payer</button>
+            <div id="helloasso-instruction" class="helloasso-box">
+                <p>Copiez cette référence pour HelloAsso :</p>
+                <code id="order-ref" style="background:white; display:block; padding:10px; margin-bottom:10px;"></code>
+                <a href="#" class="btn" style="display:block; text-align:center; text-decoration:none;">Ouvrir HelloAsso</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let cart = JSON.parse(localStorage.getItem('volley_cart')) || [];
+    const modelViewer = document.querySelector('#jersey-model');
+
+    // Fonction pour mettre à jour la texture 3D
+    async function update3D() {
+        const name = document.getElementById('name').value.toUpperCase();
+        const num = document.getElementById('number').value;
+        const canvas = document.getElementById('textureCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Dessin de la texture
+        ctx.fillStyle = "#0047AB"; // Couleur du maillot
+        ctx.fillRect(0, 0, 512, 512);
+        ctx.fillStyle = "white";
+        ctx.textAlign = "center";
+        
+        ctx.font = "bold 150px Arial";
+        ctx.fillText(num || "00", 256, 300);
+        
+        ctx.font = "bold 50px Arial";
+        ctx.fillText(name || "NOM", 256, 100);
+
+        // Appliquer la texture au modèle 3D
+        if (modelViewer.model) {
+            const material = modelViewer.model.materials[0];
+            const texture = await modelViewer.createTexture(canvas.toDataURL());
+            material.pbrMetallicRoughness.baseColorTexture.setTexture(texture);
+        }
+    }
+
+    function renderCart() {
+        const list = document.getElementById('cart-list');
+        let total = 0;
+        list.innerHTML = '';
+        cart.forEach((item, idx) => {
+            total += item.price;
+            list.innerHTML += `<div class="cart-item">${item.qty}x Maillot ${item.size} (${item.name} n°${item.num})</div>`;
+        });
+        document.getElementById('total').innerText = `Total : ${total}€`;
+        document.getElementById('checkout-area').style.display = cart.length > 0 ? 'block' : 'none';
+        localStorage.setItem('volley_cart', JSON.stringify(cart));
+    }
+
+    function addToCart() {
+        cart.push({
+            size: document.getElementById('size').value,
+            num: document.getElementById('number').value || "00",
+            name: document.getElementById('name').value.toUpperCase() || "SANS NOM",
+            price: 45,
+            qty: 1
+        });
+        renderCart();
+    }
+
+    function generateOrder() {
+        const ref = cart.map(i => `${i.size}-${i.num}-${i.name}`).join(' / ');
+        document.getElementById('order-ref').innerText = ref;
+        document.getElementById('helloasso-instruction').style.display = 'block';
+    }
+
+    // Initialisation
+    window.addEventListener('load', () => {
+        renderCart();
+        setTimeout(update3D, 1000); // Laisse le temps au modèle de charger
+    });
+</script>
+</body>
+</html>
